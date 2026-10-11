@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "audiohub"
+version = "0.1.0"
+description = "Low-cost software-defined audio router: one source, many Bluetooth sinks."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+
+# COST CONSTRAINT: zero runtime dependencies, on purpose.
+# Everything here must install and run on a stock Debian python3 with no wheels
+# to build and no network access -- including on a low-end SBC. Any addition to
+# this list must be justified in docs/cost.md.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+audiohub = "audiohub.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "hardware: requires real Bluetooth/audio hardware (deselected by default)",
+]
+addopts = "-m 'not hardware'"
