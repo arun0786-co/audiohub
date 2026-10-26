@@ -463,6 +463,16 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+# --------------------------------------------------------------------- watch
+
+
+def cmd_watch(args: argparse.Namespace) -> int:
+    from . import watch
+
+    print(f"watching routes every {args.interval:g}s, ctrl-c to stop")
+    return watch.run(Hub(), interval=args.interval, steps=1 if args.once else None)
+
+
 # ----------------------------------------------------------------- mute/mode
 
 
@@ -550,6 +560,11 @@ def build_parser() -> argparse.ArgumentParser:
     um = sub.add_parser("unmute", help="unmute a sink")
     um.add_argument("sink")
     um.set_defaults(func=cmd_mute, unmute=True)
+
+    w = sub.add_parser("watch", help="keep routed sinks alive, reconnect them when they drop")
+    w.add_argument("--interval", type=float, default=5.0, help="seconds between checks")
+    w.add_argument("--once", action="store_true", help="check one time and exit")
+    w.set_defaults(func=cmd_watch)
 
     md = sub.add_parser("mode", help="switch operating mode")
     md.add_argument("mode", choices=["idle", "movie", "personal"])
