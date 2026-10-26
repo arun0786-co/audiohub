@@ -75,6 +75,8 @@ class AudioService:
                     available=True,
                     metadata={
                         "default": str(backend_sink.is_default),
+                        # persist() saves this, reconnecting needs it
+                        **({"address": backend_sink.address} if backend_sink.address else {}),
                         **backend_sink.metadata,
                     },
                 ),
