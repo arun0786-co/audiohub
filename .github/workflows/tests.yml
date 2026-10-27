@@ -1,0 +1,75 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unit:
+    # the suite needs no bluetooth and no audio, so it runs anywhere
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python: "3.9" }   # oldest we promise to support
+          - { os: ubuntu-latest, python: "3.12" }
+          - { os: macos-latest, python: "3.12" }   # the machine i actually develop on
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: tests
+        run: python -m pytest -q
+
+  # free linux, so use it to at least import and run the linux backend once.
+  # there is no pipewire and no bluetooth radio on a runner, so this does not
+  # prove the backend works - it proves it fails politely instead of crashing,
+  # which is the thing docs/limitations.md says is unknown.
+  linux-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: install
+        run: pip install -e .
+
+      - name: doctor must not crash with no audio server
+        run: |
+          audiohub doctor
+          audiohub doctor --json > doctor.json
+          python -c "import json; json.load(open('doctor.json'))"
+
+      - name: devices and status must not crash either
+        run: |
+          audiohub devices
+          audiohub status
+
+      - name: routing to a sink that does not exist must fail cleanly, not traceback
+        run: |
+          set +e
+          out=$(audiohub route default nope 2>&1); code=$?
+          set -e
+          echo "$out"
+          test "$code" -eq 2 || { echo "expected exit 2, got $code"; exit 1; }
+          case "$out" in *Traceback*) echo "crashed instead of reporting"; exit 1;; esac
+
+      - name: upload the linux doctor report
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-doctor-report
+          path: doctor.json
