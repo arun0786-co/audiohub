@@ -84,3 +84,42 @@ def test_bluetooth_address_is_saved(hub):
     from audiohub import config as cfg
 
     assert cfg.load().sink("hesh").address == "AA:BB:CC:DD:EE:01"
+
+
+@pytest.mark.parametrize(
+    "tries, lost_for, expected",
+    [(10, 600, True), (9, 600, False), (10, 599, False), (0, 99999, False), (50, 5000, True)],
+)
+def test_should_give_up_needs_tries_and_time(tries, lost_for, expected):
+    assert watch.should_give_up(tries, lost_for) is expected
+
+
+def test_gives_up_then_comes_back(hub, audio_backend, monkeypatch):
+    st = watch.new_state()
+    calls = []
+
+    def never_connects(address):
+        calls.append(address)
+        return False
+
+    monkeypatch.setattr(hub.bluetooth.backend, "connect", never_connects)
+    audio_backend.remove_sink("bt1")
+    events = []
+    for t in range(0, 1200, 5):
+        events += watch.step(hub, st, now=t)
+    assert len([e for e in events if "giving up on hesh" in e]) == 1
+    assert st["next_try"]["hesh"] == float("inf")
+
+    # no more tries after that
+    n = len(calls)
+    for t in range(1200, 2400, 5):
+        watch.step(hub, st, now=t)
+    assert len(calls) == n
+    assert ["default", "hesh"] in hub.config.routes
+
+    # switched on again: the route comes back and the counters are cleared
+    audio_backend.add_sink(BackendSink(ref="bt1", name="Hesh ANC", kind="bluetooth", address="AA:BB:CC:DD:EE:01"))
+    events = watch.step(hub, st, now=2400)
+    assert any("hesh is back" in e for e in events)
+    assert st["gave_up"] == {} and st["lost"] == {}
+    assert hub.engine.is_connected("default", "hesh")

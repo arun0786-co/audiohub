@@ -16,12 +16,30 @@ from typing import Callable, Dict, List, Optional
 
 from .backends import NotSupported
 from .routing import RoutingEngine
+from .state import DeviceState
 
 BACKOFF = [5, 10, 20, 40, 60]  # seconds before the 1st, 2nd, 3rd ... reconnect try
 
+# give up only when both are true. a laptop that slept for an hour has a long
+# lost time but few tries, so it still gets its tries after it wakes up.
+GIVE_UP_TRIES = 10
+GIVE_UP_AFTER_S = 600
+
+
+def should_give_up(tries: int, lost_for_s: float) -> bool:
+    """should we stop trying to reconnect a headphone that is still gone?
+
+    `tries` is how many reconnect attempts were made since it was lost.
+    `lost_for_s` is how long it has been missing, in seconds.
+
+    giving up only stops the retry loop. the route is always kept, and if
+    the headphone is switched on again `step` notices and puts it back.
+    """
+    return tries >= GIVE_UP_TRIES and lost_for_s >= GIVE_UP_AFTER_S
+
 
 def new_state() -> Dict[str, dict]:
-    return {"lost": {}, "tries": {}, "next_try": {}}
+    return {"lost": {}, "tries": {}, "next_try": {}, "gave_up": {}}
 
 
 def _address_of(hub, sink_id: str) -> Optional[str]:
@@ -57,6 +75,7 @@ def step(hub, st: Dict[str, dict], now: float) -> List[str]:
         gone_for = now - st["lost"].pop(sink_id)
         st["tries"].pop(sink_id, None)
         st["next_try"].pop(sink_id, None)
+        st["gave_up"].pop(sink_id, None)
         events.append(f"{sink_id} is back after {gone_for:.0f}s")
         changed = True
 
@@ -74,8 +93,22 @@ def step(hub, st: Dict[str, dict], now: float) -> List[str]:
         st["next_try"][sink_id] = now + wait
         if ok:
             events.append(f"reconnected {sink_id}, waiting for its audio output to show up")
-        else:
-            events.append(f"reconnect {sink_id} failed ({reason}), next try in {wait}s")
+            continue
+
+        tries, lost_for = st["tries"][sink_id], now - st["lost"][sink_id]
+        if should_give_up(tries, lost_for):
+            st["gave_up"][sink_id] = now
+            st["next_try"][sink_id] = float("inf")
+            hub.bluetooth.machine(address).force(
+                DeviceState.FAILED, "gave up reconnecting"
+            )
+            events.append(
+                f"giving up on {sink_id} after {tries} tries ({lost_for:.0f}s). "
+                "route kept, switch the headphone on and it comes back"
+            )
+            continue
+
+        events.append(f"reconnect {sink_id} failed ({reason}), next try in {wait}s")
 
     if changed:
         sources = sorted({src for src, _ in hub.config.routes})
