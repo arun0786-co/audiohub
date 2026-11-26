@@ -56,7 +56,8 @@ device names come from what the system finds. no MAC address is written in the c
 
 1. marks it lost (but never deletes the route)
 2. tries to reconnect it, waiting longer each time (5s, 10s, 20s, 40s, 60s) so the bluetooth chip is not spammed
-3. when it shows up again, puts the route back by itself
+3. stops trying after at least 10 tries and 10 minutes, so it does not go on all day (the route is kept)
+4. when it shows up again, puts the route back by itself
 
 ## test
 
