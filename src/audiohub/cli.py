@@ -17,7 +17,7 @@ from .audio import DEFAULT_SOURCE_ID, AudioService
 from .backends import Capability, NotSupported, detect, platform_name
 from .bluetooth import BluetoothService
 from .devices import DeviceRegistry
-from .latency import MOVIE_RELATIVE_OFFSET_TARGET_MS, max_relative_offset
+from .latency import MOVIE_RELATIVE_OFFSET_TARGET_MS, drift_ms_per_hour, max_relative_offset
 from .routing import RoutingEngine, RoutingError, UnknownSink, UnknownSource
 
 OK, NO, UNKNOWN = "[✓]", "[✗]", "[?]"
@@ -473,6 +473,47 @@ def cmd_watch(args: argparse.Namespace) -> int:
     return watch.run(Hub(), interval=args.interval, steps=1 if args.once else None)
 
 
+# ------------------------------------------------------------------- measure
+
+
+def cmd_measure_signal(args: argparse.Namespace) -> int:
+    from . import measure
+
+    try:
+        n = measure.write_signal(args.file, args.seconds)
+    except (measure.MeasureError, OSError) as exc:
+        print(f"cannot write the signal: {exc}", file=sys.stderr)
+        return 2
+    print(f"wrote {args.file}, {n} clicks. play it to both headphones, then record the LEFT cup of one")
+    print("and the RIGHT cup of the other with one phone.")
+    return 0
+
+
+def cmd_measure_analyze(args: argparse.Namespace) -> int:
+    from . import measure
+
+    try:
+        r = measure.analyze(args.file)
+    except measure.MeasureError as exc:
+        print(f"not measured: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps({"left": args.left, "right": args.right, **r}, indent=2))
+        return 0
+    off = r["median_ms"]
+    late, early = (args.right, args.left) if off >= 0 else (args.left, args.right)
+    verdict = "within" if abs(off) <= MOVIE_RELATIVE_OFFSET_TARGET_MS else "OVER"
+    print(f"{late} is {abs(off):.1f} ms later than {early} "
+          f"({verdict} the {MOVIE_RELATIVE_OFFSET_TARGET_MS:.0f} ms movie target)")
+    print(f"clicks: {r['n']} over {r['seconds']:.0f} s")
+    print(f"jitter: {r['jitter_ms']:.2f} ms   range (right - left): {r['min_ms']:.1f} to {r['max_ms']:.1f} ms")
+    if r["drift_ppm"] is None:
+        print(f"drift: not measured, needs {measure.MIN_DRIFT_S / 60:.0f} minutes or more")
+    else:
+        print(f"drift: {r['drift_ppm']:+.1f} ppm ({drift_ms_per_hour(r['drift_ppm']):+.1f} ms per hour)")
+    return 0
+
+
 # ----------------------------------------------------------------- mute/mode
 
 
@@ -565,6 +606,19 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--interval", type=float, default=5.0, help="seconds between checks")
     w.add_argument("--once", action="store_true", help="check one time and exit")
     w.set_defaults(func=cmd_watch)
+
+    ms = sub.add_parser("measure", help="how far apart are two headphones (phase 6)")
+    mss = ms.add_subparsers(dest="measure_command", required=True)
+    sg = mss.add_parser("signal", help="write the click track to play")
+    sg.add_argument("file")
+    sg.add_argument("--seconds", type=float, default=60.0)
+    sg.set_defaults(func=cmd_measure_signal)
+    an = mss.add_parser("analyze", help="get the offset from a recording (16 bit wav)")
+    an.add_argument("file")
+    an.add_argument("--left", default="left", help="headphone whose LEFT cup was recorded")
+    an.add_argument("--right", default="right", help="headphone whose RIGHT cup was recorded")
+    an.add_argument("--json", action="store_true")
+    an.set_defaults(func=cmd_measure_analyze)
 
     md = sub.add_parser("mode", help="switch operating mode")
     md.add_argument("mode", choices=["idle", "movie", "personal"])
