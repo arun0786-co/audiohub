@@ -127,9 +127,10 @@ result here is cheap and saves building the entire Linux implementation first.
 
 **Measurement.** A phone voice recorder placed between two headphone cups,
 capturing a click track, is sufficient to resolve tens of milliseconds and costs
-nothing. Load the recording into any waveform editor and measure the separation
-between the two click onsets. `ffmpeg` is already installed for generating the
-signal. The measurement rig is **not** part of the product architecture.
+nothing. `audiohub measure signal` writes the click track (2 kHz on the left,
+5 kHz on the right). Record the LEFT cup of one headphone and the RIGHT cup of
+the other, and `audiohub measure analyze` gives the offset. For three headphones
+measure two pairs that share one. The measurement rig is **not** part of the product architecture.
 
 **Record here:** per-sink mean latency, jitter, max relative offset, drift over
 one hour, and the reconnection behaviour.

@@ -73,7 +73,7 @@ demonstrated by an entry in `experiments.md` is listed here as unknown.
   registry level, but the backend ref remains ambiguous.
 - `LinuxAudioBackend._default_sink_name()` falls back to `None` when `pactl` is
   absent; the `wpctl` path is a stub.
-- Reconnection has no backoff policy. Callers must supply one; nothing does yet.
-- There is no daemon. Nothing monitors sink state between CLI invocations, so
-  Phase 5's "detect disconnections and attempt reconnection" is currently a
-  manual `audiohub status` rather than a running service.
+- Reconnection and backoff only happen while `audiohub watch` is running. There
+  is no background service that starts it.
+- `audiohub measure` has only been tested on made up recordings. Offsets of 1 s
+  or more cannot be told apart, because the clicks are 2 s apart.

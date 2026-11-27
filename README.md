@@ -16,7 +16,7 @@ right now this is only the **software part**. no hardware is bought yet, and it 
 | 3 - one source to one headphone | done in code, not tried with real bluetooth yet |
 | 4 - one source to many headphones | done in code, **not tried yet** |
 | 5 - movie mode + keep headphones connected (`audiohub watch`) | done in code, not tried with real bluetooth yet |
-| 6 - measure if the headphones are in sync | **not done** - this is the next real experiment |
+| 6 - measure if the headphones are in sync | tool done (`audiohub measure`), **not measured yet** - this is the next real experiment |
 | 7 - fix the delay between headphones | maths done, waiting for phase 6 |
 | 8/9 - personal mode, usb host part | planned, not built |
 | web page | not started (command line first) |
@@ -59,6 +59,20 @@ device names come from what the system finds. no MAC address is written in the c
 3. stops trying after at least 10 tries and 10 minutes, so it does not go on all day (the route is kept)
 4. when it shows up again, puts the route back by itself
 
+### measure
+
+how far apart are two headphones? you need both of them and a phone.
+
+```bash
+audiohub measure signal clicks.wav --seconds 60
+# play clicks.wav to both headphones. keep the LEFT cup of one and the RIGHT cup
+# of the other next to the phone, and record with the phone
+ffmpeg -i recording.m4a -c:a pcm_s16le recording.wav
+audiohub measure analyze recording.wav --left hesh --right cb-evolve
+```
+
+left and right have different tones, so it knows which headphone is late. for drift, record 5 minutes or more. it has only been tested on made up recordings, not on real headphones.
+
 ## test
 
 ```bash
@@ -80,6 +94,7 @@ src/audiohub/
   bluetooth.py    connecting
   watch.py        keeps routed headphones alive
   latency.py      delay maths
+  measure.py      click track + offset from a recording
   backends/       linux (pipewire + bluez) | macos (coreaudio) | null (for tests)
 scripts/          read only system checks
 docs/             architecture | experiments | limitations | cost
